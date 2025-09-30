@@ -22,11 +22,11 @@ jobs:
           node-version: 20
           cache: "pnpm"
 
-      # 3️⃣ Install pnpm globally and ensure PATH
-      - name: Install pnpm
+      # 3️⃣ Install pnpm via corepack (modern recommended way)
+      - name: Enable corepack & use pnpm
         run: |
-          npm install -g pnpm
-          echo "::add-path::$(npm bin -g)"
+          corepack enable
+          corepack prepare pnpm@latest --activate
 
       # 4️⃣ Install dependencies
       - name: Install dependencies
@@ -47,7 +47,7 @@ jobs:
           NEW_VERSION=$(pnpm version patch -y)
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
 
-      # 8️⃣ Push version bump back to GitHub
+      # 8️⃣ Push version bump
       - name: Push version bump
         run: |
           git config user.name "github-actions[bot]"
