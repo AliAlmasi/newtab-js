@@ -15,40 +15,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js + pnpm
+      # 2️⃣ Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
           cache: "pnpm"
 
-      # 3️⃣ Install dependencies
+      # 3️⃣ Install pnpm globally and ensure PATH
+      - name: Install pnpm
+        run: |
+          npm install -g pnpm
+          echo "::add-path::$(npm bin -g)"
+
+      # 4️⃣ Install dependencies
       - name: Install dependencies
         run: pnpm install
 
-      # 4️⃣ Run tests
+      # 5️⃣ Run tests
       - name: Run tests
         run: pnpm test
 
-      # 5️⃣ Build TypeScript
+      # 6️⃣ Build TypeScript
       - name: Build package
         run: pnpm build
 
-      # 6️⃣ Bump version (patch)
+      # 7️⃣ Bump version (patch)
       - name: Bump version
         id: version
         run: |
           NEW_VERSION=$(pnpm version patch -y)
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
 
-      # 7️⃣ Push version bump
+      # 8️⃣ Push version bump back to GitHub
       - name: Push version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git push
 
-      # 8️⃣ Publish to npm
+      # 9️⃣ Publish to npm
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
