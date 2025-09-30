@@ -1,4 +1,3 @@
-// test/index.test.ts
 import newtab from "../src/index";
 
 describe("newtab", () => {
