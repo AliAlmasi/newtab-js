@@ -12,33 +12,28 @@ jobs:
 
     steps:
       # 1️⃣ Checkout repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      # 2️⃣ Setup Node.js without pnpm cache
+      - uses: actions/setup-node@v3
         with:
           node-version: 20
-          cache: "pnpm"
 
-      # 3️⃣ Install pnpm via corepack (modern recommended way)
-      - name: Enable corepack & use pnpm
+      # 3️⃣ Enable Corepack & activate pnpm
+      - name: Enable Corepack & activate pnpm
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
+          pnpm -v
 
-      # 4️⃣ Install dependencies
-      - name: Install dependencies
-        run: pnpm install
+      # 4️⃣ Install dependencies (cached by lockfile)
+      - run: pnpm install --frozen-lockfile
 
       # 5️⃣ Run tests
-      - name: Run tests
-        run: pnpm test
+      - run: pnpm test
 
-      # 6️⃣ Build TypeScript
-      - name: Build package
-        run: pnpm build
+      # 6️⃣ Build package
+      - run: pnpm build
 
       # 7️⃣ Bump version (patch)
       - name: Bump version
@@ -48,8 +43,7 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
 
       # 8️⃣ Push version bump
-      - name: Push version bump
-        run: |
+      - run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git push
