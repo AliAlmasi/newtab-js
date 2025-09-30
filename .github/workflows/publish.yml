@@ -9,50 +9,46 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       # 1️⃣ Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
+      # 2️⃣ Setup Node.js + pnpm
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
           cache: "pnpm"
 
-      # 3️⃣ Install pnpm
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      # 4️⃣ Install dependencies
+      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: pnpm install
 
-      # 5️⃣ Run tests
+      # 4️⃣ Run tests
       - name: Run tests
         run: pnpm test
 
-      # 6️⃣ Build TypeScript
+      # 5️⃣ Build TypeScript
       - name: Build package
         run: pnpm build
 
-      # 7️⃣ Bump version
+      # 6️⃣ Bump version (patch)
       - name: Bump version
         id: version
         run: |
-          # automatically bump patch version
           NEW_VERSION=$(pnpm version patch -y)
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
 
-      # 8️⃣ Push version bump back to GitHub
+      # 7️⃣ Push version bump
       - name: Push version bump
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git push
 
-      # 9️⃣ Publish to npm
+      # 8️⃣ Publish to npm
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
