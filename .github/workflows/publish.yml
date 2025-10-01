@@ -1,72 +1,80 @@
-name: Build, Test, Version & Publish
+name: Publish
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_dispatch: 
+
+permissions:
+  contents: write
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: https://registry.npmjs.org/
 
-      - name: Enable Corepack & pnpm
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install pnpm
+        run: corepack prepare pnpm@latest --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Determine version
+        id: version
         run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
-          pnpm -v
+          CURRENT_VERSION=$(jq -r .version package.json)
+          echo "Current version in package.json: $CURRENT_VERSION"
 
-      - run: pnpm install --frozen-lockfile
+          if npm view newtab-js@$CURRENT_VERSION > /dev/null 2>&1; then
+            echo "⚠️ Version $CURRENT_VERSION already exists on npm. Auto-bumping..."
+            NEW_VERSION=$(pnpm version patch --no-git-tag-version)
+            echo "version=$NEW_VERSION" >> $GITHUB_ENV
+            echo "bumped=true" >> $GITHUB_ENV
+          else
+            echo "✅ Version $CURRENT_VERSION is new."
+            echo "version=$CURRENT_VERSION" >> $GITHUB_ENV
+            echo "bumped=false" >> $GITHUB_ENV
+          fi
 
-      - run: pnpm test
-
-      - run: pnpm build
-
-      - name: Git config
+      - name: Commit version bump
+        if: env.bumped == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version and push
-        id: bump
-        run: |
-          NEW_VERSION=$(pnpm version patch --no-git-tag-version)
-          echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
-
           git add package.json pnpm-lock.yaml
-          git commit -m "chore: bump version to $NEW_VERSION"
-
-          git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
-
-          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
-              git tag "$NEW_VERSION"
-              git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --tags
-          else
-              echo "Skipping tag creation: not a push to main branch"
-          fi
-
-      - name: Create GitHub release
-        if: github.event_name != 'workflow_dispatch'
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ env.new_version }}
-          name: Release ${{ env.new_version }}
-          draft: false
-          prerelease: false
-
-      - name: Setup npm auth
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          git commit -m "chore: bump version to ${{ env.version }}"
+          git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main
 
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish --access public
+
+      - name: Generate changelog
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version: ${{ env.version }}
+          skip-commit: true
+          skip-tag: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.version }}
+          name: Release ${{ env.version }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
