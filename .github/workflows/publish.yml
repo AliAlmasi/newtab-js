@@ -1,34 +1,41 @@
-name: Publish
+name: Build & Publish
 
 on:
+  workflow_dispatch:
   push:
     tags:
-      - '*'
-  workflow_dispatch:
+      - 'v*.*.*'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ Checkout with full history and tags
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: Setup Node.js
+      # 2️⃣ Setup Node.js and Corepack + pnpm
+      - name: Setup Node.js & pnpm
         uses: actions/setup-node@v3
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
-
       - name: Enable Corepack & pnpm
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
           pnpm -v
 
+      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Determine and bump version if needed
+      # 4️⃣ Determine and bump version if needed
+      - name: Determine and bump version
         id: version
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
@@ -37,8 +44,8 @@ jobs:
           echo "Current version in package.json: $CURRENT_VERSION"
           echo "Last git tag: $LAST_TAG"
 
-          if [ "$CURRENT_VERSION" = "$LAST_TAG" ]; then
-            echo "Version already published, bumping patch..."
+          if [ "$CURRENT_VERSION" = "$LAST_TAG" ] || [ -z "$LAST_TAG" ]; then
+            echo "No new version detected, bumping patch..."
             NEW_VERSION=$(pnpm version patch --no-git-tag-version)
 
             git config user.name "github-actions[bot]"
@@ -49,27 +56,30 @@ jobs:
             git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
 
             echo "bumped=true" >> $GITHUB_ENV
-            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_ENV
           else
-            echo "User manually changed version. using version $CURRENT_VERSION"
+            echo "User manually set version, using $CURRENT_VERSION"
             echo "bumped=false" >> $GITHUB_ENV
-            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_ENV
           fi
 
+      # 5️⃣ Create Git tag if version was bumped
       - name: Create Git tag
         if: env.bumped == 'true'
         run: |
-          git tag "${{ steps.version.outputs.version }}"
+          git tag "v${{ env.version }}"
           git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --tags
 
+      # 6️⃣ Create GitHub release (always)
       - name: Create GitHub release
-        if: github.ref == 'refs/heads/main'
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          generate-changelog: true
+          tag: "v${{ env.version }}"
+          name: "Release v${{ env.version }}"
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
+      # 7️⃣ Publish to NPM
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
