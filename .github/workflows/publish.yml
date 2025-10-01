@@ -22,37 +22,42 @@ jobs:
           corepack prepare pnpm@latest --activate
           pnpm -v
 
-      - name: Download dist from build workflow
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: ./dist
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Download SHA256 digest
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-sha256
+          path: ./dist
+
+      - name: Verify SHA256 digest
+        run: sha256sum -c ./dist/dist.sha256
 
       - name: Determine and bump version if needed
         id: version
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
-
           LAST_TAG=$(git tag --sort=-creatordate | head -n 1)
 
-          echo "Current version in package.json: $CURRENT_VERSION"
+          echo "Current package.json version: $CURRENT_VERSION"
           echo "Last git tag: $LAST_TAG"
 
           if [ "$CURRENT_VERSION" = "$LAST_TAG" ]; then
-            echo "Version already published, bumping patch..."
+            echo "Version unchanged, bumping patch..."
             NEW_VERSION=$(pnpm version patch --no-git-tag-version)
-            
+
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            
+
             git add package.json pnpm-lock.yaml
             git commit -m "chore: bump version to $NEW_VERSION"
             git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
           else
-            echo "User changed version manually, using $CURRENT_VERSION"
+            echo "Using user-specified version: $CURRENT_VERSION"
             NEW_VERSION=$CURRENT_VERSION
           fi
 
@@ -62,10 +67,9 @@ jobs:
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish --access public --no-git-checks --no-verify-access
+        run: pnpm publish ./dist --access public --no-git-checks --no-verify-access
 
       - name: Create GitHub release
-        if: github.ref == 'refs/heads/main'
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.current_version }}

@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -24,13 +27,23 @@ jobs:
           pnpm -v
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build package
         run: pnpm build
 
-      - name: Upload dist for later workflow
+      - name: Generate SHA256 digest for dist
+        run: |
+          find dist -type f -exec sha256sum {} \; | sort -k2 > dist.sha256
+
+      - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist
+          path: ./dist
+
+      - name: Upload SHA256 digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-sha256
+          path: ./dist/dist.sha256
