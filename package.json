@@ -1,6 +1,6 @@
 {
   "name": "newtab-js",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A good way to navigate the user to a new tab (without using `location.replace` or `window.open`) in JS",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
