@@ -11,37 +11,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo
       - uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
       - uses: actions/setup-node@v3
         with:
           node-version: 20
 
-      # 3️⃣ Enable Corepack & pnpm
       - name: Enable Corepack & pnpm
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
           pnpm -v
 
-      # 4️⃣ Install dependencies
       - run: pnpm install --frozen-lockfile
 
-      # 5️⃣ Run tests
       - run: pnpm test
 
-      # 6️⃣ Build TypeScript
       - run: pnpm build
 
-      # 7️⃣ Configure Git for CI
       - name: Git config
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # 8️⃣ Bump version, commit, tag, and push (conditional)
       - name: Bump version and push
         id: bump
         run: |
@@ -60,7 +52,6 @@ jobs:
               echo "Skipping tag creation: not a push to main branch"
           fi
 
-      # 9️⃣ Conditionally create GitHub release
       - name: Create GitHub release
         if: github.event_name != 'workflow_dispatch'
         uses: ncipollo/release-action@v1
@@ -70,7 +61,11 @@ jobs:
           draft: false
           prerelease: false
 
-      # 🔟 Publish to npm
+      - name: Setup npm auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
