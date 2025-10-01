@@ -41,13 +41,24 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # 8️⃣ Bump version, push commit & tag
-      - name: Bump version and push tag
+      # 8️⃣ Bump version, commit, tag, and push (conditional)
+      - name: Bump version and push
         id: bump
         run: |
-          NEW_VERSION=$(pnpm version patch -y)
+          NEW_VERSION=$(pnpm version patch --no-git-tag-version)
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
-          git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" --follow-tags
+
+          git add package.json pnpm-lock.yaml
+          git commit -m "chore: bump version to $NEW_VERSION"
+
+          git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
+
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ]; then
+              git tag "$NEW_VERSION"
+              git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --tags
+          else
+              echo "Skipping tag creation: not a push to main branch"
+          fi
 
       # 9️⃣ Conditionally create GitHub release
       - name: Create GitHub release
