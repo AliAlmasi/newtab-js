@@ -67,7 +67,7 @@ jobs:
       - name: Create Git tag
         if: env.bumped == 'true'
         run: |
-          git tag "v${{ env.version }}"
+          git tag "${{ env.version }}"
           git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" --tags
 
       # 6️⃣ Create GitHub release (always)
@@ -75,9 +75,10 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: "v${{ env.version }}"
-          name: "Release v${{ env.version }}"
+          name: "Release ${{ env.version }}"
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}
+          makeLatest: true
 
       # 7️⃣ Publish to NPM
       - name: Publish to npm
