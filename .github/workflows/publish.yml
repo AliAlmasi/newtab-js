@@ -14,44 +14,52 @@ jobs:
       # 1️⃣ Checkout repo
       - uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js without pnpm cache
+      # 2️⃣ Setup Node.js
       - uses: actions/setup-node@v3
         with:
           node-version: 20
 
-      # 3️⃣ Enable Corepack & activate pnpm
-      - name: Enable Corepack & activate pnpm
+      # 3️⃣ Enable Corepack & pnpm
+      - name: Enable Corepack & pnpm
         run: |
           corepack enable
           corepack prepare pnpm@latest --activate
           pnpm -v
 
-      # 4️⃣ Install dependencies (cached by lockfile)
+      # 4️⃣ Install dependencies
       - run: pnpm install --frozen-lockfile
 
       # 5️⃣ Run tests
       - run: pnpm test
 
-      # 6️⃣ Build package
+      # 6️⃣ Build TypeScript
       - run: pnpm build
 
-      # 7️⃣ Bump version (patch)
-      - name: Bump version
-        id: version
+      # 7️⃣ Configure Git for CI
+      - name: Git config
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # 8️⃣ Bump version, push commit & tag
+      - name: Bump version and push tag
+        id: bump
+        run: |
           NEW_VERSION=$(pnpm version patch -y)
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
+          git push "https://${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" --follow-tags
 
-      # 8️⃣ Push version bump
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git push
+      # 9️⃣ Conditionally create GitHub release
+      - name: Create GitHub release
+        if: github.event_name != 'workflow_dispatch'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ env.new_version }}
+          name: Release ${{ env.new_version }}
+          draft: false
+          prerelease: false
 
-      # 9️⃣ Publish to npm
+      # 🔟 Publish to npm
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
