@@ -1,11 +1,47 @@
-name: Publish
+name: Build & Publish
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
 
 jobs:
-  publish:
+  build:
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Enable Corepack & pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+          pnpm -v
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build package
+        run: pnpm build
+
+      - name: Upload dist for later steps
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: ./dist
+
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
 
     steps:
       - uses: actions/checkout@v4
@@ -28,28 +64,23 @@ jobs:
           name: dist
           path: ./dist
 
-      - name: Download SHA256 digest
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-sha256
-          path: ./dist
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Verify SHA256 digest
-        run: sha256sum -c ./dist/dist.sha256
-
-      - name: Determine and bump version if needed
+      - name: Determine version
         id: version
         run: |
           CURRENT_VERSION=$(jq -r .version package.json)
           LAST_TAG=$(git tag --sort=-creatordate | head -n 1)
 
-          echo "Current package.json version: $CURRENT_VERSION"
+          echo "Current version in package.json: $CURRENT_VERSION"
           echo "Last git tag: $LAST_TAG"
 
           if [ "$CURRENT_VERSION" = "$LAST_TAG" ]; then
-            echo "Version unchanged, bumping patch..."
+            echo "Version already exists, bumping patch..."
             NEW_VERSION=$(pnpm version patch --no-git-tag-version)
 
+            # Configure Git for committing
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -57,7 +88,7 @@ jobs:
             git commit -m "chore: bump version to $NEW_VERSION"
             git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD
           else
-            echo "Using user-specified version: $CURRENT_VERSION"
+            echo "Using version $CURRENT_VERSION"
             NEW_VERSION=$CURRENT_VERSION
           fi
 
@@ -69,7 +100,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish ./dist --access public --no-git-checks --no-verify-access
 
-      - name: Create GitHub release
+      - name: Create GitHub release with changelog
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.current_version }}
